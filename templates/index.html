@@ -1,120 +1,118 @@
 {% extends "base.html" %}
 
-{% block title %}Solver{% endblock %}
-
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
-<div class="card">
-<h2 style="color:red;">NEW UI LOADED</h2>
-    <h1 style="margin-bottom:20px;">⚡ MathLab AI Solver</h1>
+<div class="hud-shell">
+    <header class="hud-header">
+        <div class="header-left">
+            <span class="glitch-text" data-text="CORE_v4.0.2">CORE_v4.0.2</span>
+            <span class="status-indicator">● SYSTEM_ACTIVE</span>
+        </div>
+        <div class="header-right">
+            <span id="timestamp"></span>
+        </div>
+    </header>
 
-    <form method="POST">
+    <section class="input-unit">
+        <form method="POST" id="core-form">
+            <div class="input-wrapper">
+                <span class="input-prefix">>>></span>
+                <input 
+                    type="text" 
+                    name="equation" 
+                    id="inputBox" 
+                    placeholder="ENTER_MATHEMATICAL_SEQUENCE..." 
+                    autocomplete="off" 
+                    value="{{ request.form.get('equation', '') }}"
+                    required
+                >
+                <button type="submit" class="btn-execute">EXECUTE</button>
+            </div>
+        </form>
+    </section>
 
-        <input 
-            type="text" 
-            name="equation"
-            placeholder="Enter equation (e.g. 2*x + 3 = 7)"
-            id="inputBox"
-        >
+    <div class="main-display-grid">
+        <div class="display-panel data-stream">
+            <h3 class="panel-label">PROCESS_LOG_STREAM</h3>
+            <div id="steps-container">
+                </div>
 
-        <div style="margin-top:10px;">
-            <button type="submit" onclick="this.innerText='Solving...'">Solve</button>
-            <button type="button" onclick="randomExample()">🎲 Try Random</button>
+            {% if solution %}
+            <div id="final-result-box" class="result-highlight" style="display: none;">
+                <span class="label">COORDINATES_RESOLVED</span>
+                <div class="solution-text">{{ solution | safe }}</div>
+            </div>
+            {% endif %}
         </div>
 
-    </form>
-
-    <!-- Live Preview -->
-    <p id="preview" class="subtext"></p>
-
-    <!-- Equation -->
-    {% if equation_latex %}
-    <div class="result-box">
-        <h3>📘 Interpreted Equation</h3>
-        <p>$$ {{ equation_latex }} $$</p>
+        <div class="display-panel viz-projection">
+            <h3 class="panel-label">GEOMETRIC_PROJECTION</h3>
+            <div id="viz-container">
+                {% if graph %}
+                    {{ graph | safe }}
+                {% else %}
+                    <div class="no-data-msg">[ SEARCHING_FOR_SIGNAL... ]</div>
+                {% endif %}
+            </div>
+            </div>
     </div>
-    {% endif %}
-
-    <!-- Solution -->
-    {% if solution %}
-    <div class="result-box">
-        <h3>✅ Solution</h3>
-        <p>{{ solution|safe }}</p>
-    </div>
-    {% endif %}
-
-    <!-- Animated Steps -->
-    {% if steps %}
-    <div class="result-box">
-        <h3> Solving Process</h3>
-        <ul id="steps-list" style="list-style:none; padding:0;"></ul>
-    </div>
-    {% endif %}
-
-    <!-- Graph -->
-    {% if graph %}
-    <div class="result-box">
-        <h3>📊 Graph</h3>
-        {{ graph|safe }}
-    </div>
-    {% endif %}
-
 </div>
 
 <script>
-
-// Live preview
-const input = document.getElementById("inputBox");
-const preview = document.getElementById("preview");
-
-input.addEventListener("input", () => {
-    preview.innerHTML = "$$" + input.value + "$$";
-    if (window.MathJax) {
-        MathJax.typeset();
-    }
-});
-
-// Random examples
-function randomExample() {
-    const examples = [
-        "2*x+3=7",
-        "x^2-4",
-        "sin(x)",
-        "x^3-x-2",
-        "cos(x)-x"
-    ];
-    input.value = examples[Math.floor(Math.random() * examples.length)];
-}
-
-// Animated steps
-const stepsData = { steps , tojson , safe };
-const stepsList = document.getElementById("steps-list");
-
-if (stepsData && stepsData.length > 0) {
-    let i = 0;
-
-    function showStep() {
-        if (i < stepsData.length) {
-            const li = document.createElement("li");
-            li.innerText = "➤ " + stepsData[i];
-            li.style.opacity = 0;
-            li.style.marginBottom = "10px";
-
-            stepsList.appendChild(li);
-
-            setTimeout(() => {
-                li.style.transition = "0.5s";
-                li.style.opacity = 1;
-            }, 100);
-
-            i++;
-            setTimeout(showStep, 800);
+    document.addEventListener("DOMContentLoaded", function() {
+        // 1. Digital Clock for the HUD
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('timestamp').innerText = now.toLocaleTimeString();
         }
-    }
+        setInterval(updateTime, 1000);
+        updateTime();
 
-    showStep();
-}
+        // 2. Step Animation Sequence
+        // We wrap the Jinja variable in quotes and parse it to avoid VS Code red errors
+        const rawSteps = '{{ steps|tojson|safe if steps else "[]" }}';
+        let stepsData = [];
+        
+        try {
+            stepsData = JSON.parse(rawSteps);
+        } catch (e) {
+            console.warn("CORE: No active process sequence detected.");
+        }
 
+        if (stepsData.length > 0) {
+            let i = 0;
+            const container = document.getElementById("steps-container");
+            const finalBox = document.getElementById("final-result-box");
+
+            function renderStep() {
+                if (i < stepsData.length) {
+                    const stepDiv = document.createElement("div");
+                    stepDiv.className = "step-entry";
+                    
+                    // Uses the Dictionary format: {"op": "SCAN", "msg": "..."}
+                    stepDiv.innerHTML = `<span class="op-code">[${stepsData[i].op}]</span> ${stepsData[i].msg}`;
+                    
+                    container.appendChild(stepDiv);
+
+                    // Animate the line appearing
+                    setTimeout(() => {
+                        stepDiv.style.opacity = "1";
+                        stepDiv.style.transform = "translateX(0)";
+                        // Refresh MathJax to render the glowing LaTeX
+                        if (window.MathJax) MathJax.typesetPromise();
+                    }, 50);
+
+                    i++;
+                    setTimeout(renderStep, 600); // Wait 600ms before next step
+                } else if (finalBox) {
+                    // Reveal the final solution box once steps finish
+                    finalBox.style.display = "block";
+                    finalBox.style.animation = "glowPulse 2s infinite alternate";
+                }
+            }
+            renderStep();
+        }
+    });
 </script>
-
 {% endblock %}

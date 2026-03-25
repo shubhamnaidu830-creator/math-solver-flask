@@ -1,265 +1,132 @@
 from flask import Flask, render_template, request
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-
 import sympy as sp
 import numpy as np
 import plotly.graph_objs as go
-
 from sympy.parsing.sympy_parser import (
     parse_expr,
     standard_transformations,
     implicit_multiplication_application
 )
 
-# custom math engine
-from math_engine.algebra import solve_equation  # type: ignore
-
-# -----------------------------
-# Sympy parser settings
-# -----------------------------
-transformations = standard_transformations + (
-    implicit_multiplication_application,
-)
-
-# -----------------------------
-# Flask App
-# -----------------------------
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mathlab.db'
+# --- Database Configuration ---
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///core_math.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 db = SQLAlchemy(app)
 
-# -----------------------------
-# Database Model
-# -----------------------------
 class Calculation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
     equation = db.Column(db.Text, nullable=False)
     solution = db.Column(db.Text)
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def repr(self):
-        return f'<Calculation {self.id}>'
-
 with app.app_context():
     db.create_all()
 
-# -----------------------------
-# Equation Preprocessor
-# -----------------------------
+# --- Sympy Parser Settings ---
+transformations = standard_transformations + (implicit_multiplication_application,)
+
 def preprocess_equation(eq):
+    """Handles standard user input and converts to Sympy-ready format."""
     eq = eq.replace("^", "**")
     if "=" in eq:
         left, right = eq.split("=")
         eq = f"({left})-({right})"
     return eq
 
-# -----------------------------
-# Newton Method
-# -----------------------------
-def newton_method(expr, x0=1, tol=1e-6, max_iter=50):
+def generate_tactical_graph(expr, roots=None):
+    """Generates the HUD-style glowing graph."""
     x = sp.symbols('x')
-    f = sp.lambdify(x, expr, "numpy")
-    fprime_expr = sp.diff(expr, x)
-    fprime = sp.lambdify(x, fprime_expr, "numpy")
-
-    xn = x0
-    table = []
-
-    for i in range(max_iter):
-        try:
-            xn1 = xn - f(xn)/fprime(xn)
-        except:
-            break
-
-        table.append((i+1, xn, xn1))
-
-        if abs(xn1-xn) < tol:
-            return xn1, table
-
-        xn = xn1
-
-    return xn, table
-
-# -----------------------------
-# Bisection Method
-# -----------------------------
-def bisection_method(expr, tol=1e-6):
-    x = sp.symbols('x')
-    f = sp.lambdify(x, expr, "numpy")
-
-    xs = np.linspace(-10, 10, 200)
-
-    a = None
-    b = None
-
-    for i in range(len(xs)-1):
-        if f(xs[i]) * f(xs[i+1]) < 0:
-            a = xs[i]
-            b = xs[i+1]
-            break
-
-    if a is None:
-        return None, []
-
-    table = []
-
-    while abs(b-a) > tol:
-        c = (a+b)/2
-        table.append((a,b,c))
-
-        if f(c) == 0:
-            break
-        elif f(a)*f(c) < 0:
-            b = c
-        else:
-            a = c
-
-    return (a+b)/2, table
-
-# -----------------------------
-# Graph Generator
-# -----------------------------
-def generate_graph(expr, roots=None):
-    x = sp.symbols('x')
-
     try:
         f = sp.lambdify(x, expr, "numpy")
         xs = np.linspace(-10, 10, 400)
-        ys = np.real(f(xs))
+        ys = f(xs)
+        if isinstance(ys, (int, float)):
+            ys = np.full_like(xs, ys)
     except:
-        xs = np.linspace(-10,10,400)
+        xs = np.linspace(-10, 10, 400)
         ys = np.zeros_like(xs)
 
     fig = go.Figure()
-
-    fig.add_trace(
-        go.Scatter(x=xs, y=ys, mode='lines', name='f(x)')
-    )
-
-    if roots:
-        real_roots = []
-        for r in roots:
-            try:
-                real_roots.append(float(sp.re(r)))
-            except:
-                pass
-
-        fig.add_trace(
-            go.Scatter(
-                x=real_roots,
-                y=[0]*len(real_roots),
-                mode='markers',
-                marker=dict(size=10),
-                name="Roots"
-            )
-        )
-
+    # Cyan line with a faint area fill for that holographic look
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, 
+        mode='lines', 
+        name='f(x)', 
+        line=dict(color='#00f2ff', width=2),
+        fill='tozeroy',
+        fillcolor='rgba(0, 242, 255, 0.05)'
+    ))
+    
     fig.update_layout(
-        title="Function Graph",
-        xaxis_title="x",
-        yaxis_title="y"
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#00f2ff', family="Orbitron"),
+        margin=dict(l=10, r=10, t=10, b=10),
+        xaxis=dict(gridcolor='rgba(255,255,255,0.05)', zerolinecolor='#ffffff'),
+        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', zerolinecolor='#ffffff'),
+        showlegend=False,
+        height=350
     )
-
     return fig.to_html(full_html=False)
 
-# -----------------------------
-# Home Route (UPDATED WITH STEPS)
-# -----------------------------
-@app.route('/', methods=['GET','POST'])
+@app.route('/', methods=['GET', 'POST'])
 def home():
-
-    solution_text = None
-    graph_html = None
-    newton_table = None
-    bisection_table = None
-    equation_latex = None
-    steps = []
+    # Initializing HUD data structure
+    context = {
+        "equation_latex": None,
+        "solution": None,
+        "steps": [],
+        "graph": None
+    }
 
     if request.method == 'POST':
-
-        prob_title = request.form.get('title','Math Problem')
         prob_eq = request.form.get('equation')
+        if not prob_eq:
+            return render_template("index.html", **context)
 
         try:
-            # Step 1
-            steps.append(f"Input Equation: {prob_eq}")
-
-            # Step 2
+            # Step 1: Initialize Scan
             processed = preprocess_equation(prob_eq)
-            steps.append(f"After preprocessing: {processed}")
-
-            # Step 3
             expr = parse_expr(processed, transformations=transformations)
-            steps.append(f"Parsed expression: {expr}")
+            context["equation_latex"] = sp.latex(expr)
+            context["steps"].append({"op": "SCAN", "msg": f"Target locked: $${sp.latex(expr)}$$"})
+            
+            # Step 2: Optimization Sequence
+            simplified = sp.simplify(expr)
+            if simplified != expr:
+                context["steps"].append({"op": "OPTZ", "msg": f"Simplifying structure: $${sp.latex(simplified)}$$"})
+            
+            # Step 3: Differential Analysis (Internal)
+            x_sym = sp.symbols('x')
+            diff_expr = sp.diff(simplified, x_sym)
+            context["steps"].append({"op": "CORE", "msg": f"Gradient calculated: $${sp.latex(diff_expr)}$$"})
 
-            equation_latex = sp.latex(expr)
+            # Step 4: Symbolic Extraction
+            roots = sp.solve(simplified, x_sym)
+            context["steps"].append({"op": "DONE", "msg": f"Extraction complete. Found {len(roots)} roots."})
+            
+            # Step 5: Final Result Formatting
+            if roots:
+                context["solution"] = "<br>".join([f"$$ x = {sp.latex(r)} $$" for r in roots])
+            else:
+                context["solution"] = "No real roots detected in current coordinate plane."
 
-            # Step 4
-            roots = solve_equation(expr)
-            steps.append(f"Symbolic roots: {roots}")
+            # Step 6: Visual Projection
+            context["graph"] = generate_tactical_graph(expr, roots)
 
-            latex_roots = [sp.latex(r) for r in roots]
-            solution_text = "Symbolic Roots:<br>" + "<br>".join([f"$$ {r} $$" for r in latex_roots])
-
-            # Step 5
-            newton_root, newton_table = newton_method(expr)
-            steps.append(f"Newton root ≈ {newton_root}")
-            solution_text += f"<br>Newton Root ≈ {newton_root}"
-
-            # Step 6
-            bisection_root, bisection_table = bisection_method(expr)
-            steps.append(f"Bisection root ≈ {bisection_root}")
-            solution_text += f"<br>Bisection Root ≈ {bisection_root}"
-
-            # Step 7
-            graph_html = generate_graph(expr, roots)
-            steps.append("Graph generated")
-
-            # Save
-            new_calc = Calculation(
-                title=prob_title,
-                equation=prob_eq,
-                solution=solution_text
-            )
-
+            # DB Log
+            new_calc = Calculation(equation=prob_eq, solution=str(roots))
             db.session.add(new_calc)
             db.session.commit()
 
         except Exception as e:
-            solution_text = f"Error: {e}"
-            steps = []
+            context["steps"] = [{"op": "ERR!", "msg": f"Logic Conflict: {str(e)}"}]
 
-    return render_template(
-        "index.html",
-        solution=solution_text,
-        graph=graph_html,
-        newton_table=newton_table,
-        bisection_table=bisection_table,
-        equation_latex=equation_latex,
-        steps=steps
-    )
+    return render_template("index.html", **context)
 
-# -----------------------------
-# Library Route
-# -----------------------------
-@app.route('/numerical')
-def numerical_library():
-    calculations = Calculation.query.order_by(
-        Calculation.date_created.desc()
-    ).all()
-
-    return render_template(
-        "numerical.html",
-        calculations=calculations
-    )
-
-# -----------------------------
-# Run
-# -----------------------------
-if __name__ == "main":
+if __name__ == "__main__":
     app.run(debug=True)
