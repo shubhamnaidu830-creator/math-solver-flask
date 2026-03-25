@@ -140,3 +140,20 @@ body {
     0% { top: -100px; }
     100% { top: 100%; }
 }
+
+.step-entry::after {
+    content: "▋"; /* The block cursor */
+    margin-left: 5px;
+    color: #00f2ff;
+    animation: blink 0.8s infinite;
+}
+
+/* Optional: remove cursor from finished lines */
+.step-entry:not(:last-child)::after {
+    display: none;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}

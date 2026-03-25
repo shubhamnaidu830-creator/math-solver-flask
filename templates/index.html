@@ -85,33 +85,55 @@
             const container = document.getElementById("steps-container");
             const finalBox = document.getElementById("final-result-box");
 
-            function renderStep() {
-                if (i < stepsData.length) {
-                    const stepDiv = document.createElement("div");
-                    stepDiv.className = "step-entry";
-                    
-                    // Uses the Dictionary format: {"op": "SCAN", "msg": "..."}
-                    stepDiv.innerHTML = `<span class="op-code">[${stepsData[i].op}]</span> ${stepsData[i].msg}`;
-                    
-                    container.appendChild(stepDiv);
+    // ... inside your DOMContentLoaded listener
+         if (stepsData.length > 0) {
+             let stepIndex = 0;
+              const container = document.getElementById("steps-container");
+             const finalBox = document.getElementById("final-result-box");
 
-                    // Animate the line appearing
-                    setTimeout(() => {
-                        stepDiv.style.opacity = "1";
-                        stepDiv.style.transform = "translateX(0)";
-                        // Refresh MathJax to render the glowing LaTeX
-                        if (window.MathJax) MathJax.typesetPromise();
-                    }, 50);
+           function typeStep() {
+        if (stepIndex < stepsData.length) {
+            // 1. Create the container for this specific step
+            const stepDiv = document.createElement("div");
+            stepDiv.className = "step-entry";
+            stepDiv.style.opacity = "1"; // Show it immediately
+            
+            // 2. Add the [OP] tag first (static)
+            const opSpan = `<span class="op-code">[${stepsData[stepIndex].op}]</span> `;
+            stepDiv.innerHTML = opSpan;
+            container.appendChild(stepDiv);
 
-                    i++;
-                    setTimeout(renderStep, 1200); // Wait 1200ms before next step
-                } else if (finalBox) {
-                    // Reveal the final solution box once steps finish
-                    finalBox.style.display = "block";
-                    finalBox.style.animation = "glowPulse 2s infinite alternate";
+            // 3. Logic to type the message letter-by-letter
+            let charIndex = 0;
+            const fullMsg = stepsData[stepIndex].msg;
+            
+            function typeChar() {
+                if (charIndex < fullMsg.length) {
+                    // Append one character at a time
+                    stepDiv.innerHTML += fullMsg.charAt(charIndex);
+                    charIndex++;
+                    
+                    // Speed of individual letters (30ms = fast terminal feel)
+                    setTimeout(typeChar, 30); 
+                } else {
+                    // Once word is done, wait and move to next step
+                    stepIndex++;
+                    // Delay between different steps (800ms)
+                    setTimeout(typeStep, 800); 
+                    
+                    // Refresh MathJax if the step contained LaTeX
+                    if (window.MathJax) MathJax.typesetPromise();
                 }
             }
-            renderStep();
+            
+            typeChar(); // Start typing the message
+        } else if (finalBox) {
+            finalBox.style.display = "block";
+        }
+    }
+    
+    typeStep(); // Start the sequence
+}
         }
     });
 </script>
