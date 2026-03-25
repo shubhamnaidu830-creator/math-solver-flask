@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Library{% endblock %}
+
+{% block content %}
+
+<h1 style="margin-bottom:40px; letter-spacing:-2px;">Saved Numericals</h1>
+
+<div style="
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+gap:20px;
+width:90%;
+max-width:1100px;
+">
+
+{% for calc in calculations %}
+
+<div class="card" style="padding:25px;">
+
+<span style="
+color:var(--apple-blue);
+font-size:10px;
+font-weight:700;
+">
+{{ calc.date_created.strftime('%d %b, %H:%M') }}
+</span>
+
+<h3 style="margin:10px 0;">
+{{ calc.title }}
+</h3>
+
+<p style="
+color:rgba(255,255,255,0.6);
+font-size:14px;
+margin-bottom:10px;
+">
+<b>Equation:</b> $$ {{ calc.equation }} $$
+</p>
+// A simple RK4 implementation for your backend logic
+function solveRK4(y, dy, h, steps) {
+    let results = [];
+    let t = 0;
+
+    for (let i = 0; i < steps; i++) {
+        // This is where your 'Equation' input would be parsed
+        const f = (t, y, dy) => -0.5 * dy - 5 * Math.sin(y); 
+
+        let k1 = h * dy;
+        let l1 = h * f(t, y, dy);
+
+        let k2 = h * (dy + l1/2);
+        let l2 = h * f(t + h/2, y + k1/2, dy + l1/2);
+
+        let k3 = h * (dy + l2/2);
+        let l3 = h * f(t + h/2, y + k2/2, dy + l2/2);
+
+        let k4 = h * (dy + l3);
+        let l4 = h * f(t + h, y + k3, dy + l3);
+
+        y = y + (k1 + 2*k2 + 2*k3 + k4) / 6;
+        dy = dy + (l1 + 2*l2 + 2*l3 + l4) / 6;
+        t += h;
+
+        results.push({t: t.toFixed(2), value: y.toFixed(4)});
+    }
+    return results;
+}
+<div style="
+margin-top:10px;
+padding:12px;
+background:rgba(255,255,255,0.08);
+border-radius:10px;
+font-size:14px;
+">
+
+<b>Solution:</b> $$ {{ calc.solution }} $$
+<img src="{{ url_for('static', filename='graph_' ~ calc.id ~ '.png') }}" width="400">
+</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+{% endblock %}

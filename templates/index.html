@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MathLab | Numerical Analysis</title>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+<!-- MathJax for LaTeX -->
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+</head>
+
+<body>
+
+<div class="card">
+
+<h2>New Computation</h2>
+
+<form method="POST" id="solveForm">
+
+<div class="form-group">
+<label>Title</label>
+<input type="text" name="title" placeholder="Problem Name">
+</div>
+
+<div class="form-grid">
+
+<div class="form-group">
+<label>Equation</label>
+<textarea name="equation" placeholder="Example: x^3 - x - 2"></textarea>
+</div>
+
+<div class="form-group">
+<label>Parameters</label>
+<textarea name="parameters" class="param-input" placeholder="x0 = 1
+tol = 1e-6
+max_iter = 50"></textarea>
+</div>
+
+</div>
+
+<div class="button-row">
+<button type="submit" class="btn-add">Save & Compute</button>
+<a href="/numerical" class="browse-link">Browse Library</a>
+</div>
+
+</form>
+
+
+{% if equation_latex %}
+
+<div style="margin-top:30px;color:white">
+<h3>Equation</h3>
+<p>$$ {{ equation_latex }} $$</p>
+</div>
+
+{% endif %}
+
+
+{% if solution %}
+
+<div style="margin-top:30px;color:white">
+<h3>Solution</h3>
+<p>{{ solution|safe }}</p>
+</div>
+
+{% endif %}
+
+
+{% if graph %}
+
+<div style="margin-top:30px">
+<h3 style="color:white">Graph</h3>
+{{ graph|safe }}
+</div>
+
+{% endif %}
+
+
+{% if newton_table %}
+
+<div style="margin-top:30px;color:white">
+
+<h3>Newton Method Iterations</h3>
+
+<table style="width:100%;border-collapse:collapse">
+
+<tr>
+<th>Iteration</th>
+<th>xₙ</th>
+<th>xₙ₊₁</th>
+</tr>
+
+{% for row in newton_table %}
+
+<tr>
+<td>{{ row[0] }}</td>
+<td>{{ row[1] }}</td>
+<td>{{ row[2] }}</td>
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+{% endif %}
+
+
+{% if bisection_table %}
+
+<div style="margin-top:30px;color:white">
+
+<h3>Bisection Method Iterations</h3>
+
+<table style="width:100%;border-collapse:collapse">
+
+<tr>
+<th>a</th>
+<th>b</th>
+<th>c</th>
+</tr>
+
+{% for row in bisection_table %}
+
+<tr>
+<td>{{ row[0] }}</td>
+<td>{{ row[1] }}</td>
+<td>{{ row[2] }}</td>
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+{% endif %}
+
+</div>
+<script>
+document.getElementById("solveForm").reset();
+</script>
+</body>
+</html>
