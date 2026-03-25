@@ -15,7 +15,6 @@ from sympy.parsing.sympy_parser import (
 # custom math engine
 from math_engine.algebra import solve_equation  # type: ignore
 
-
 # -----------------------------
 # Sympy parser settings
 # -----------------------------
@@ -26,54 +25,44 @@ transformations = standard_transformations + (
 # -----------------------------
 # Flask App
 # -----------------------------
-app = Flask(__name__)
+app = Flask(name)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mathlab.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-
 # -----------------------------
 # Database Model
 # -----------------------------
 class Calculation(db.Model):
-
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
     equation = db.Column(db.Text, nullable=False)
     solution = db.Column(db.Text)
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def __repr__(self):
+    def repr(self):
         return f'<Calculation {self.id}>'
-
 
 with app.app_context():
     db.create_all()
-
 
 # -----------------------------
 # Equation Preprocessor
 # -----------------------------
 def preprocess_equation(eq):
-
     eq = eq.replace("^", "**")
-
     if "=" in eq:
         left, right = eq.split("=")
         eq = f"({left})-({right})"
-
     return eq
-
 
 # -----------------------------
 # Newton Method
 # -----------------------------
 def newton_method(expr, x0=1, tol=1e-6, max_iter=50):
-
     x = sp.symbols('x')
-
     f = sp.lambdify(x, expr, "numpy")
     fprime_expr = sp.diff(expr, x)
     fprime = sp.lambdify(x, fprime_expr, "numpy")
@@ -82,7 +71,6 @@ def newton_method(expr, x0=1, tol=1e-6, max_iter=50):
     table = []
 
     for i in range(max_iter):
-
         try:
             xn1 = xn - f(xn)/fprime(xn)
         except:
@@ -97,12 +85,10 @@ def newton_method(expr, x0=1, tol=1e-6, max_iter=50):
 
     return xn, table
 
-
 # -----------------------------
 # Bisection Method
 # -----------------------------
 def bisection_method(expr, tol=1e-6):
-
     x = sp.symbols('x')
     f = sp.lambdify(x, expr, "numpy")
 
@@ -112,7 +98,6 @@ def bisection_method(expr, tol=1e-6):
     b = None
 
     for i in range(len(xs)-1):
-
         if f(xs[i]) * f(xs[i+1]) < 0:
             a = xs[i]
             b = xs[i+1]
@@ -124,13 +109,11 @@ def bisection_method(expr, tol=1e-6):
     table = []
 
     while abs(b-a) > tol:
-
         c = (a+b)/2
         table.append((a,b,c))
 
         if f(c) == 0:
             break
-
         elif f(a)*f(c) < 0:
             b = c
         else:
@@ -138,19 +121,16 @@ def bisection_method(expr, tol=1e-6):
 
     return (a+b)/2, table
 
-
 # -----------------------------
 # Graph Generator
 # -----------------------------
 def generate_graph(expr, roots=None):
-
     x = sp.symbols('x')
 
     try:
         f = sp.lambdify(x, expr, "numpy")
         xs = np.linspace(-10, 10, 400)
         ys = np.real(f(xs))
-
     except:
         xs = np.linspace(-10,10,400)
         ys = np.zeros_like(xs)
@@ -158,18 +138,11 @@ def generate_graph(expr, roots=None):
     fig = go.Figure()
 
     fig.add_trace(
-        go.Scatter(
-            x=xs,
-            y=ys,
-            mode='lines',
-            name='f(x)'
-        )
+        go.Scatter(x=xs, y=ys, mode='lines', name='f(x)')
     )
 
     if roots:
-
         real_roots = []
-
         for r in roots:
             try:
                 real_roots.append(float(sp.re(r)))
@@ -193,39 +166,9 @@ def generate_graph(expr, roots=None):
     )
 
     return fig.to_html(full_html=False)
-    
-def parse_parameters(param_text):
-
-    # default parameters
-    params = {
-        "x0": 1,
-        "tol": 1e-6,
-        "max_iter": 50
-    }
-
-    if not param_text:
-        return params
-
-    lines = param_text.split("\n")
-
-    for line in lines:
-
-        if "=" in line:
-
-            key, val = line.split("=")
-
-            key = key.strip()
-            val = val.strip()
-
-            try:
-                params[key] = float(val)
-            except:
-                pass
-
-    return params    
 
 # -----------------------------
-# Home Route
+# Home Route (UPDATED WITH STEPS)
 # -----------------------------
 @app.route('/', methods=['GET','POST'])
 def home():
@@ -235,6 +178,7 @@ def home():
     newton_table = None
     bisection_table = None
     equation_latex = None
+    steps = []
 
     if request.method == 'POST':
 
@@ -242,34 +186,41 @@ def home():
         prob_eq = request.form.get('equation')
 
         try:
+            # Step 1
+            steps.append(f"Input Equation: {prob_eq}")
 
+            # Step 2
             processed = preprocess_equation(prob_eq)
+            steps.append(f"After preprocessing: {processed}")
 
-            expr = parse_expr(
-                processed,
-                transformations=transformations
-            )
+            # Step 3
+            expr = parse_expr(processed, transformations=transformations)
+            steps.append(f"Parsed expression: {expr}")
 
             equation_latex = sp.latex(expr)
 
-            # symbolic roots
+            # Step 4
             roots = solve_equation(expr)
+            steps.append(f"Symbolic roots: {roots}")
 
             latex_roots = [sp.latex(r) for r in roots]
             solution_text = "Symbolic Roots:<br>" + "<br>".join([f"$$ {r} $$" for r in latex_roots])
 
-            # Newton
+            # Step 5
             newton_root, newton_table = newton_method(expr)
+            steps.append(f"Newton root ≈ {newton_root}")
             solution_text += f"<br>Newton Root ≈ {newton_root}"
 
-            # Bisection
+            # Step 6
             bisection_root, bisection_table = bisection_method(expr)
+            steps.append(f"Bisection root ≈ {bisection_root}")
             solution_text += f"<br>Bisection Root ≈ {bisection_root}"
 
-            # Graph
+            # Step 7
             graph_html = generate_graph(expr, roots)
+            steps.append("Graph generated")
 
-            # Save to database
+            # Save
             new_calc = Calculation(
                 title=prob_title,
                 equation=prob_eq,
@@ -280,8 +231,8 @@ def home():
             db.session.commit()
 
         except Exception as e:
-
             solution_text = f"Error: {e}"
+            steps = []
 
     return render_template(
         "index.html",
@@ -289,16 +240,15 @@ def home():
         graph=graph_html,
         newton_table=newton_table,
         bisection_table=bisection_table,
-        equation_latex=equation_latex
+        equation_latex=equation_latex,
+        steps=steps
     )
 
-
 # -----------------------------
-# History Page
+# Library Route
 # -----------------------------
 @app.route('/numerical')
 def numerical_library():
-
     calculations = Calculation.query.order_by(
         Calculation.date_created.desc()
     ).all()
@@ -308,9 +258,8 @@ def numerical_library():
         calculations=calculations
     )
 
-
 # -----------------------------
-# Run App
+# Run
 # -----------------------------
-if __name__ == "__main__":
+if __name__ == "main":
     app.run(debug=True)
